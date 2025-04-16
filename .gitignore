@@ -1,0 +1,9 @@
+.ipynb_checkpoints
+mit-bih
+__pycache__
+Miniconda3-latest-Linux-x86_64.sh
+client_1_full.npz
+client_1_mini.npz
+client_2_full.npz
+client_2_mini.npz
+global_model.pkl
