@@ -14,4 +14,4 @@ torchvision==0.3.0
 tqdm==4.42.1
 wfdb
 Pillow<7
-pycryptodomes
+PyCryptoDomes

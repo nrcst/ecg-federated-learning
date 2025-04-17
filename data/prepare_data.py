@@ -75,15 +75,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Preprocess MIT-BIH data for a client.')
     parser.add_argument('--client_id', type=int, required=True, help='Client ID (starting from 1)')
     parser.add_argument('--total_clients', type=int, required=True, help='Total number of clients')
-    parser.add_argument('--data_dir', type=str, default='.', help='Directory containing MIT-BIH records')
     args = parser.parse_args()
+
+    data_dir = 'mit-bih'
 
     # List of MIT-BIH record names (without file extension).
     # These files should be available in args.data_dir.
     records = [str(i) for i in range(100, 235)]
     
-    # Change the working directory to where the MIT-BIH records are located
-    os.chdir(args.data_dir)
+    os.chdir(data_dir)
 
     X, y = preprocess_mitbih(records, args.client_id, args.total_clients, window_size=128)
     if X.size == 0:
