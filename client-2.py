@@ -10,7 +10,7 @@ from tqdm import tqdm
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score, confusion_matrix
 
-from collections import Counter  # 🔸 added for label distribution
+from collections import Counter
 
 from model.models import EcgResNet34
 
@@ -118,7 +118,7 @@ def train_local_model(model, train_loader, device, global_weights=None, mu=0.001
             outputs = model(inputs)
             loss = criterion(outputs, labels)
 
-            # 🔸 Add FedProx proximal term
+            # Add FedProx proximal term
             if global_weights is not None:
                 proximal_term = 0.0
                 for name, param in model.named_parameters():
@@ -192,7 +192,6 @@ if __name__ == '__main__':
             send_msg(s, ciphertext)
             send_msg(s, tag)
 
-            # 🔸 Send real label distribution
             label_counts = dict(Counter(y_train.tolist()))
             label_data = pickle.dumps(label_counts)
             send_msg(s, label_data)
