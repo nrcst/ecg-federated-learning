@@ -63,6 +63,3 @@ After each round, clients print:
 - Local model metrics
 - Global model metrics
 - Accuracy difference
-
-Enjoy experimenting with federated ECG classification!
-```
