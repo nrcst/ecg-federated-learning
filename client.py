@@ -4,11 +4,13 @@ import pickle
 from Crypto.Cipher import AES
 import os
 import numpy as np
+import collections
+import copy
 from tqdm import tqdm
 from torch.utils.data import TensorDataset, DataLoader
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score, confusion_matrix
 
-from collections import Counter 
+from collections import Counter
 
 from model.models import EcgResNet34
 
@@ -49,7 +51,7 @@ def decrypt(nonce, ciphertext, tag, key):
     return data
 
 def load_preprocessed_data(client_id):
-    file_path = f"./mit-bih/client_{client_id}_mitbih_morphology.npz"
+    file_path = f"./client_{client_id}_data.npz"
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Preprocessed file {file_path} not found. Please run prepare_data.py first.")
     data = np.load(file_path)
@@ -70,6 +72,8 @@ def evaluate_model(model, test_loader, device):
 
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.cpu().numpy())
+
+    print("Predicted class distribution:", collections.Counter(all_preds))
 
     accuracy = accuracy_score(all_labels, all_preds) * 100
     precision, recall, f1, _ = precision_recall_fscore_support(
@@ -96,7 +100,7 @@ def evaluate_model(model, test_loader, device):
         'confusion_matrix': cm
     }
 
-def train_local_model(model, train_loader, device, epochs=10, learning_rate=0.001):
+def train_local_model(model, train_loader, device, global_weights=None, mu=0.001, epochs=10, learning_rate=0.001):
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     model.train()
@@ -113,6 +117,15 @@ def train_local_model(model, train_loader, device, epochs=10, learning_rate=0.00
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
+
+            # Add FedProx proximal term
+            if global_weights is not None:
+                proximal_term = 0.0
+                for name, param in model.named_parameters():
+                    if param.requires_grad:
+                        global_param = global_weights[name].to(device)
+                        proximal_term += ((param - global_param) ** 2).sum()
+                loss += (mu / 2) * proximal_term
 
             loss.backward()
             optimizer.step()
@@ -170,7 +183,7 @@ if __name__ == '__main__':
             local_metrics = evaluate_model(trained_model, test_loader, device)
 
             trained_model = trained_model.to('cpu')
-            # trained_model = add_noise(trained_model, sensitivity=0.01, epsilon=1.0)
+            trained_model = add_noise(trained_model, sensitivity=0.01, epsilon=1.0)
 
             print("--- Sending model to server ---")
             model_data = pickle.dumps(trained_model)
@@ -183,6 +196,9 @@ if __name__ == '__main__':
             label_data = pickle.dumps(label_counts)
             send_msg(s, label_data)
 
+            num_samples = len(y_train)
+            send_msg(s, pickle.dumps(num_samples))
+
             print("--- Waiting for global model ---")
             nonce_recv = recv_msg(s)
             ciphertext_recv = recv_msg(s)
@@ -194,9 +210,11 @@ if __name__ == '__main__':
             decrypted_data = decrypt(nonce_recv, ciphertext_recv, tag_recv, KEY)
             updated_global_model = pickle.loads(decrypted_data)
             updated_global_model = updated_global_model.to(device)
+            global_weights = copy.deepcopy(updated_global_model.state_dict())
+            trained_global_model = train_local_model(updated_global_model, train_loader, device, global_weights=global_weights, mu=0.001, epochs=1)
 
             print("--- Evaluating Updated Global Model ---")
-            global_metrics = evaluate_model(updated_global_model, test_loader, device)
+            global_metrics = evaluate_model(trained_global_model, test_loader, device)
 
             print("\n--- Model Comparison ---")
             print(f"Local Model Accuracy: {local_metrics['accuracy']:.2f}%")
